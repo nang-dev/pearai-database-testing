@@ -4,10 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import ChatSidebar from "@/components/ChatSidebar";
 import ChatWindow from "@/components/ChatWindow";
-import { useAuth } from "@/context/AuthContext";
+import { useUser, UserButton } from "@stackframe/stack";
 
 export default function Home() {
-  const { user, signOut } = useAuth();
+  const user = useUser();
 
   if (!user) {
     return (
@@ -137,14 +137,9 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600 dark:text-gray-300">
-            {user.email}
+            {user.primaryEmail}
           </span>
-          <button
-            onClick={signOut}
-            className="px-4 py-2 bg-red-500 text-white text-sm rounded-md hover:bg-red-600 transition-colors"
-          >
-            Sign Out
-          </button>
+          <UserButton />
         </div>
       </div>
       <div className="flex flex-1 overflow-hidden">
