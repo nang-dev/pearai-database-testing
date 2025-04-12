@@ -9,18 +9,25 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     try {
-      await signIn(email, password);
+      const { error: signInError } = await signIn(email, password);
+      if (signInError) {
+        throw signInError;
+      }
       router.push("/");
-    } catch {
-      setError("Failed to sign in");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sign in");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -48,6 +55,7 @@ export default function SignIn() {
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -64,6 +72,7 @@ export default function SignIn() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -75,16 +84,17 @@ export default function SignIn() {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
             >
-              Sign in
+              {isLoading ? "Signing in..." : "Sign in"}
             </button>
           </div>
         </form>
 
         <div className="text-center text-sm">
           <p className="text-gray-600 dark:text-gray-400">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href="/signup"
               className="font-medium text-blue-600 hover:text-blue-500"

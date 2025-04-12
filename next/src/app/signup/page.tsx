@@ -10,19 +10,26 @@ export default function SignUp() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const { signIn } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const { signUp } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     try {
-      // For now, we'll just sign in after registration since we don't have a backend
-      await signIn(email, password);
-      router.push("/");
+      const { error: signUpError } = await signUp(email, password, name);
+      if (signUpError) {
+        throw signUpError;
+      }
+      // Show success message and redirect to sign in
+      router.push("/signin?message=Please check your email to verify your account");
     } catch (err) {
-      setError("Failed to sign up");
+      setError(err instanceof Error ? err.message : "Failed to sign up");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -33,6 +40,9 @@ export default function SignUp() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
             Create your account
           </h2>
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+            Please check your email after signup to verify your account
+          </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
@@ -49,6 +59,7 @@ export default function SignUp() {
                 placeholder="Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -65,6 +76,7 @@ export default function SignUp() {
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -81,6 +93,8 @@ export default function SignUp() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                minLength={6}
               />
             </div>
           </div>
@@ -92,9 +106,10 @@ export default function SignUp() {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
             >
-              Sign up
+              {isLoading ? "Creating account..." : "Sign up"}
             </button>
           </div>
         </form>

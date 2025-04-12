@@ -5,9 +5,23 @@ import Image from "next/image";
 import ChatSidebar from "@/components/ChatSidebar";
 import ChatWindow from "@/components/ChatWindow";
 import { useAuth } from "@/context/AuthContext";
+import { useSearchParams } from "next/navigation";
 
 export default function Home() {
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
+  const searchParams = useSearchParams();
+  const verifyMessage = searchParams.get("message");
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -41,6 +55,12 @@ export default function Home() {
             </div>
           </div>
         </nav>
+
+        {verifyMessage && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 px-6 py-3 rounded-md shadow-lg">
+            {verifyMessage}
+          </div>
+        )}
 
         {/* Hero Section */}
         <div className="pt-32 pb-20">
@@ -122,6 +142,26 @@ export default function Home() {
     );
   }
 
+  // Show a message if email is not confirmed
+  if (!user.confirmed_at) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="text-center max-w-md mx-auto p-6">
+          <h2 className="text-2xl font-bold mb-4">Please Verify Your Email</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            We&apos;ve sent a verification link to your email address. Please check your inbox and click the link to verify your account.
+          </p>
+          <button
+            onClick={signOut}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
       <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-800">
@@ -137,7 +177,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600 dark:text-gray-300">
-            {user.email}
+            {user.user_metadata?.full_name || user.email}
           </span>
           <button
             onClick={signOut}
