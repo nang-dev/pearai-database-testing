@@ -1,105 +1,197 @@
-import { useState } from "react";
+import { useUser } from '@stackframe/stack';
+import { useState, useEffect, useRef } from 'react';
 
 interface Message {
   id: string;
   content: string;
-  sender: {
-    name: string;
-    isCurrentUser: boolean;
-  };
-  timestamp: string;
+  sender_id: string;
+  receiver_id: string;
+  created_at: string;
+  sender_email: string;
 }
 
-const mockMessages: Message[] = [
-  {
-    id: '1',
-    content: 'Hey, how are you?',
-    sender: {
-      name: 'Sarah Wilson',
-      isCurrentUser: false,
-    },
-    timestamp: '2:30 PM'
-  },
-  {
-    id: '2',
-    content: 'I\'m good, thanks! How about you?',
-    sender: {
-      name: 'You',
-      isCurrentUser: true,
-    },
-    timestamp: '2:31 PM'
-  },
-  {
-    id: '3',
-    content: 'Great! Just working on the project.',
-    sender: {
-      name: 'Sarah Wilson',
-      isCurrentUser: false,
-    },
-    timestamp: '2:32 PM'
-  }
-];
+interface Friend {
+  id: string;
+  email: string;
+  status: string;
+}
 
-export default function ChatWindow() {
+interface ChatWindowProps {
+  selectedFriend?: Friend;
+}
+
+export default function ChatWindow({ selectedFriend }: ChatWindowProps) {
+  const user = useUser({ or: 'redirect' });
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [error, setError] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
+  useEffect(() => {
+    if (selectedFriend) {
+      fetchMessages();
 
-    const message: Message = {
-      id: Date.now().toString(),
-      content: newMessage,
-      sender: {
-        name: 'You',
-        isCurrentUser: true,
-      },
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+      console.log('Setting up SSE connection...');
+      const eventSource = new EventSource(`/api/messages/subscribe?friendId=${selectedFriend.id}`);
 
-    setMessages([...messages, message]);
-    setNewMessage('');
+      eventSource.onopen = () => {
+        console.log('SSE connection established');
+      };
+
+      eventSource.onmessage = (event) => {
+        console.log('Received new message:', event.data);
+        try {
+          const newMessage = JSON.parse(event.data);
+
+          // Ignore connection test messages
+          if (newMessage.type === 'connected') {
+            console.log('SSE connection test received');
+            return;
+          }
+
+          // Validate message structure
+          if (!newMessage.id || !newMessage.content || !newMessage.sender_id) {
+            console.error('Invalid message structure:', newMessage);
+            return;
+          }
+
+          setMessages(prev => {
+            // Check if message already exists
+            if (prev.some(msg => msg.id === newMessage.id)) {
+              return prev;
+            }
+
+            // Add new message and sort by timestamp
+            const updatedMessages = [...prev, newMessage].sort((a, b) =>
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+
+            // Scroll to bottom on new message
+            setTimeout(scrollToBottom, 100);
+
+            return updatedMessages;
+          });
+        } catch (error) {
+          console.error('Error processing message:', error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('EventSource failed:', error);
+        eventSource.close();
+      };
+
+      // Cleanup when component unmounts or friend changes
+      return () => {
+        eventSource.close();
+      };
+    } else {
+      setMessages([]);
+    }
+  }, [selectedFriend]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const fetchMessages = async () => {
+    if (!selectedFriend) return;
+
+    try {
+      const response = await fetch(`/api/messages?friendId=${selectedFriend.id}`);
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      const data = await response.json();
+      setMessages(data.reverse()); // Reverse to show newest messages at the bottom
+    } catch (err) {
+      console.error('Error fetching messages:', err);
+      setError('Failed to load messages');
+    }
+  };
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFriend || !newMessage.trim()) return;
+
+    try {
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiverId: selectedFriend.id,
+          content: newMessage.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send message');
+      }
+
+      setNewMessage('');
+      fetchMessages(); // Refresh messages
+    } catch (err) {
+      console.error('Error sending message:', err);
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+    }
+  };
+
+  if (!selectedFriend) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Select a friend to start chatting</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <h2 className="text-xl font-semibold">Sarah Wilson</h2>
+    <div className="flex-1 flex flex-col bg-white">
+      <div className="p-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold">{selectedFriend.email}</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`flex ${message.sender.isCurrentUser ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${
+              message.sender_id === user?.id ? 'justify-end' : 'justify-start'
+            }`}
           >
             <div
-              className={`max-w-[70%] rounded-lg p-3 ${
-                message.sender.isCurrentUser
+              className={`max-w-[70%] p-3 rounded-lg ${
+                message.sender_id === user?.id
                   ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800'
+                  : 'bg-gray-100'
               }`}
             >
-              <p className="text-sm">{message.content}</p>
-              <p className="text-xs mt-1 opacity-70">{message.timestamp}</p>
+              <p>{message.content}</p>
+              <p className="text-xs mt-1 opacity-70">
+                {new Date(message.created_at).toLocaleTimeString()}
+              </p>
             </div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-800">
+      <form onSubmit={sendMessage} className="p-4 border-t border-gray-200">
+        {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
         <div className="flex space-x-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 rounded-full px-4 py-2 bg-gray-100 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 p-2 border rounded"
+            required
           />
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
             Send
           </button>
